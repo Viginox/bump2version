@@ -84,7 +84,87 @@ and using a configuration file (`bumpversion.cfg`) for more complex multi-file o
   Example bumping 1.1.9 to 2.0.0:
 
      bump2version --current-version 1.1.9 major setup.py
+     
+### --pre
+  _**[optional]**_<br />
+  **default**: False
+  
+  This parameter can be used to append a prebuild modifier.
+  
+  To use this, the configuration file must be specified in the following style.
+  Important is to keep the serialization from long to short.
+  
+  Example config file:
+  ```
+ [bumpversion]
+ current_version = 0.3.0
+ # Parse should specify the complete version string INCLUDING the suffix
+ parse = (?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\-(?P<release>[a-z]+))?(\.(?P<build>\d+))?
+ # The serialize parameter should include the version including a suffix FIRST
+ # and then the version, without the suffix
+ serialize = 
+     {major}.{minor}.{patch}-{release}.{build}
+     {major}.{minor}.{patch}
+ commit = False
+ tag = False
+ # This flag here is just for safety reasons when trying
+ # Remove this for actual bumping the version number
+ dry_run = True
+ 
+ [bumpversion:part:release]
+ first_value = dev
+ values = 
+     dev
+     alpha
+     beta
+  ```
 
+  Now the version `0.3.0` can be upgraded with a suffix `-dev.0` to `0.3.1-dev.0` with the command
+  ```
+  bump2version --pre minor
+  ```
+  or simple increase the first element of the suffix
+  ```
+  bump2version release
+  ```
+  
+  Also the suffixes can be increased with the appropriate command
+  ```
+  # increase release name
+  bump2version release
+  # increase build number
+  bump2version build
+  ```
+  
+  When updating an element of the main version (in this case *major*, *minor* or *patch*) without the
+  --pre command, the suffix will be removed.
+  
+  ```
+  # version = 0.3.1-beta-3
+  bump2version patch
+  # version = 0.3.2
+  ```
+  
+ #### Known issues
+ ##### Wrong value when not upgrading first value of suffix
+  When using only the last iterator (in this case `build`) the version will behave strange.  
+  The command
+  ```
+  bump2version build
+  ```
+  will bump the version `0.3.0` to `0.3.0-0.1` (note the 0 instead of `dev`).
+  
+ ##### Error when upgrading text version name over maximal value
+ <!--
+ TODO: This should not occure! Version 0.3.0-beta-7 should become 0.3.0 after upgrading!
+-->
+   When trying to bump a value over the available maximum value, an error will be raised.
+   Therefore when trying to bump version `0.3.0-beta-7` with the command 
+   ```
+   bump2version release
+   ```
+   the program will exit with an error, that the maximum value for **release** was already reached.  
+  
 ## Configuration file
 
 All options can optionally be specified in a config file called
