@@ -246,19 +246,23 @@ class VersionConfig:
 
         return serialized
 
-    def _choose_serialize_format(self, version, context):
+    def _choose_serialize_format(self, version, context, pre):
 
         chosen = None
 
         logger.debug("Available serialization formats: '%s'", "', '".join(self.serialize_formats))
+        logger.debug("Pre value is: {}".format(pre))
 
         for serialize_format in self.serialize_formats:
             try:
                 self._serialize(
-                    version, serialize_format, context, raise_if_incomplete=True
+                    version, serialize_format, context, raise_if_incomplete=(not pre)
                 )
                 chosen = serialize_format
                 logger.debug("Found '%s' to be a usable serialization format", chosen)
+                if pre:
+                    logger.debug("Executing pre version bump - cancelling search after first found serialize format")
+                    break
             except IncompleteVersionRepresentationException as e:
                 if not chosen:
                     chosen = serialize_format
@@ -273,9 +277,9 @@ class VersionConfig:
 
         return chosen
 
-    def serialize(self, version, context):
+    def serialize(self, version, context, pre=False):
         serialized = self._serialize(
-            version, self._choose_serialize_format(version, context), context
+            version, self._choose_serialize_format(version, context, pre), context
         )
         logger.debug("Serialized to '%s'", serialized)
         return serialized

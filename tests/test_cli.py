@@ -119,7 +119,10 @@ optional arguments:
   -h, --help            show this help message and exit
   --config-file FILE    Config file to read most of the variables from
                         (default: .bumpversion.cfg)
-  --verbose             Print verbose logging to stderr (default: 0)
+  --verbose, -v         Print verbose logging to stderr (default: 0)
+  --pre                 Enable pre change. This is used for example for change
+                        from version 3.6.2 with 'bump2version --pre minor' to
+                        3.7.0-alpha.1 (default: False)
   --list                List machine readable information (default: False)
   --allow-dirty         Don't abort if working directory is dirty (default:
                         False)
@@ -166,6 +169,9 @@ def test_usage_string(tmpdir, capsys):
     for option_line in EXPECTED_OPTIONS:
         assert option_line in out, "Usage string is missing {}".format(option_line)
 
+    for usage_line in EXPECTED_USAGE.split("\n"):
+        assert usage_line in out
+
     assert EXPECTED_USAGE in out
 
 
@@ -210,6 +216,9 @@ def test_regression_help_in_work_dir(tmpdir, capsys, vcs):
     if vcs == "git":
         assert "Version that needs to be updated (default: 1.7.2013)" in out
     else:
+        for usage_line in EXPECTED_USAGE.split("\n"):
+            assert usage_line in out
+
         assert EXPECTED_USAGE in out
 
 
@@ -345,6 +354,65 @@ message = DO NOT BUMP VERSIONS WITH THIS FILE
 
     assert "initial commit" in vcs_log
     assert "DO NOT" not in vcs_log
+
+
+def test_pre_version_tag(tmpdir):
+    tmpdir.chdir()
+
+    config = """[bumpversion]
+current_version = 0.12.0
+tag = False
+commit = False
+parse = (?P<major>\d+)\.(?P<minor>\d+)\.(?P<patch>\d+)(\-(?P<release>[a-z]+))?(\.(?P<build>\d+))?
+serialize =
+    {major}.{minor}.{patch}-{release}.{build}
+    {major}.{minor}.{patch}
+
+[bumpversion:part:release]
+first_value = dev
+values =
+    dev
+    alpha
+    beta
+
+[bumpversion:file:file4]
+"""
+
+    version = "0.12.0"
+
+    tmpdir.join("file4").write(version)
+    tmpdir.join(".bumpversion.cfg").write(config)
+
+    main(["--pre", "minor"])
+
+    assert tmpdir.join("file4").read().strip() == "0.13.0-dev.0"
+
+    main(["--pre", "major"])
+
+    assert tmpdir.join("file4").read().strip() == "1.0.0-dev.0"
+
+    main(["--pre", "patch"])
+
+    assert tmpdir.join("file4").read().strip() == "1.0.1-dev.0"
+
+    main(["release"])
+
+    assert tmpdir.join("file4").read().strip() == "1.0.1-alpha.0"
+
+    main(["build"])
+
+    assert tmpdir.join("file4").read().strip() == "1.0.1-alpha.1"
+
+    main(["--pre", "release"])
+
+    assert tmpdir.join("file4").read().strip() == "1.0.1-beta.0"
+
+    with pytest.raises(ValueError):
+        main(["--pre", "release"])
+
+    main(["minor"])
+
+    assert tmpdir.join("file4").read().strip() == "1.1.0"
 
 
 def test_bump_version(tmpdir):

@@ -37,9 +37,9 @@ class ConfiguredFile:
         self.path = path
         self._versionconfig = versionconfig
 
-    def should_contain_version(self, version, context):
+    def should_contain_version(self, version, context, pre):
 
-        context["current_version"] = self._versionconfig.serialize(version, context)
+        context["current_version"] = self._versionconfig.serialize(version, context, True)
 
         serialized_version = self._versionconfig.search.format(**context)
 
@@ -82,16 +82,17 @@ class ConfiguredFile:
                     return True
         return False
 
-    def replace(self, current_version, new_version, context, dry_run):
+    def replace(self, current_version, new_version, context, dry_run, pre):
 
         with open(self.path, "rt", encoding="utf-8") as f:
             file_content_before = f.read()
             file_new_lines = f.newlines
 
+        # Set pre to True, so that the first fitting value will be taken
         context["current_version"] = self._versionconfig.serialize(
-            current_version, context
+            current_version, context, True
         )
-        context["new_version"] = self._versionconfig.serialize(new_version, context)
+        context["new_version"] = self._versionconfig.serialize(new_version, context, pre)
 
         search_for = self._versionconfig.search.format(**context)
         replace_with = self._versionconfig.replace.format(**context)

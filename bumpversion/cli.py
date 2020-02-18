@@ -88,7 +88,7 @@ def main(original_args=None):
 
     # calculate the desired new version
     new_version = _assemble_new_version(
-        context, current_version, defaults, known_args.current_version, positionals, version_config
+        context, current_version, defaults, known_args.current_version, known_args.pre, positionals, version_config
     )
     args, file_names = _parse_arguments_phase_3(remaining_argv, positionals, defaults, parser2)
     new_version = _parse_new_version(args, new_version, version_config)
@@ -100,8 +100,8 @@ def main(original_args=None):
         for file_name
         in (file_names or positionals[1:])
     )
-    _check_files_contain_version(files, current_version, context)
-    _replace_version_in_files(files, current_version, new_version, args.dry_run, context)
+    _check_files_contain_version(files, current_version, context, True)
+    _replace_version_in_files(files, current_version, new_version, args.dry_run, context, args.pre)
     _log_list(config, args.new_version)
 
     # store the new version
@@ -159,9 +159,17 @@ def _parse_arguments_phase_1(original_args):
     )
     root_parser.add_argument(
         "--verbose",
+        "-v",
         action="count",
         default=0,
         help="Print verbose logging to stderr",
+        required=False,
+    )
+    root_parser.add_argument(
+        "--pre",
+        action="store_true",
+        default=False,
+        help="Enable pre change. This is used for example for change from version 3.6.2 with 'bump2version --pre minor' to 3.7.0-alpha.1",
         required=False,
     )
     root_parser.add_argument(
@@ -194,7 +202,9 @@ def _setup_logging(show_list, verbose):
         log_level = [logging.WARNING, logging.INFO, logging.DEBUG][verbose]
     except IndexError:
         log_level = logging.DEBUG
-    root_logger = logging.getLogger('')
+    # workaround for strange behaviour with setLevel
+    logging.basicConfig(level=log_level)
+    root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
     logger.debug("Starting %s", DESCRIPTION)
 
@@ -247,6 +257,7 @@ def _load_configuration(config_file, explicit_config, defaults):
         config_newlines = config_fp.newlines
 
     # TODO: this is a DEBUG level log
+    # TODO: When changing this, the test must be adapted accoringly!
     logger.info(config_content)
     config.read_string(config_content)
     log_config = io.StringIO()
@@ -408,7 +419,7 @@ def _setup_versionconfig(known_args, part_configs):
 
 
 def _assemble_new_version(
-    context, current_version, defaults, arg_current_version, positionals, version_config
+    context, current_version, defaults, arg_current_version, arg_pre, positionals, version_config
 ):
     new_version = None
     if "new_version" not in defaults and arg_current_version:
@@ -417,7 +428,7 @@ def _assemble_new_version(
                 logger.info("Attempting to increment part '%s'", positionals[0])
                 new_version = current_version.bump(positionals[0], version_config.order())
                 logger.info("Values are now: %s", keyvaluestring(new_version._values))
-                defaults["new_version"] = version_config.serialize(new_version, context)
+                defaults["new_version"] = version_config.serialize(new_version, context, arg_pre)
         except MissingValueForSerializationException as e:
             logger.info("Opportunistic finding of new_version failed: %s", e.message)
         except IncompleteVersionRepresentationException as e:
@@ -540,6 +551,9 @@ def _parse_arguments_phase_3(remaining_argv, positionals, defaults, parser2):
     )
     args = parser3.parse_args(remaining_argv + positionals)
 
+    # let the config file override the command line argument
+    if defaults.get("dry_run", False):
+        args.dry_run = True
     if args.dry_run:
         logger.info("Dry run active, won't touch any files.")
 
@@ -573,20 +587,20 @@ def _determine_vcs_dirty(possible_vcses, defaults):
     return None
 
 
-def _check_files_contain_version(files, current_version, context):
+def _check_files_contain_version(files, current_version, context, pre):
     # make sure files exist and contain version string
     logger.info(
         "Asserting files %s contain the version string...",
         ", ".join([str(f) for f in files]),
     )
     for f in files:
-        f.should_contain_version(current_version, context)
+        f.should_contain_version(current_version, context, pre)
 
 
-def _replace_version_in_files(files, current_version, new_version, dry_run, context):
+def _replace_version_in_files(files, current_version, new_version, dry_run, context, pre):
     # change version string in files
     for f in files:
-        f.replace(current_version, new_version, context, dry_run)
+        f.replace(current_version, new_version, context, dry_run, pre)
 
 
 def _log_list(config, new_version):
